@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import socket from './socket';
+import './App.css';
 
 function HostPanel() {
   const [roomCode, setRoomCode] = useState('');
@@ -8,9 +9,10 @@ function HostPanel() {
   const [questions, setQuestions] = useState([]);
   const [timeLeft, setTimeLeft] = useState(null);
   const [quizStarted, setQuizStarted] = useState(false);
-  const [roomCreated, setRoomCreated] = useState(false); // NEW
+  const [roomCreated, setRoomCreated] = useState(false);
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [quizEnded, setQuizEnded] = useState(false);
 
-  // Set initial questions when count changes
   useEffect(() => {
     const initialQuestions = Array.from({ length: questionCount }, () => ({
       text: '',
@@ -21,28 +23,38 @@ function HostPanel() {
     setQuestions(initialQuestions);
   }, [questionCount]);
 
-  // Receive lobby updates
   useEffect(() => {
     socket.on('lobby-update', setPlayerList);
     return () => socket.off('lobby-update');
   }, []);
 
-  // Handle room errors
   useEffect(() => {
     socket.on('room-error', ({ message }) => {
       alert(`Room Error: ${message}`);
       setRoomCode('');
-      setRoomCreated(false); // reset on error
+      setRoomCreated(false);
     });
     return () => socket.off('room-error');
   }, []);
 
-  // Countdown logic
   useEffect(() => {
     if (timeLeft === null || timeLeft <= 0) return;
     const timer = setTimeout(() => setTimeLeft(prev => prev - 1), 1000);
     return () => clearTimeout(timer);
   }, [timeLeft]);
+
+  useEffect(() => {
+    socket.on('leaderboard', setLeaderboard);
+    socket.on('quiz-ended', () => {
+      setQuizEnded(true);
+      setTimeLeft(null);
+    });
+
+    return () => {
+      socket.off('leaderboard');
+      socket.off('quiz-ended');
+    };
+  }, []);
 
   const handleQuestionChange = (index, field, value) => {
     const updated = [...questions];
@@ -72,9 +84,6 @@ function HostPanel() {
         return alert(`Please fill all fields for Question ${i + 1}`);
       }
     }
-
-    socket.emit('join', { name: 'Host', roomCode: roomCode.trim() });
-
     const formatted = questions.map(q => ({
       ...q,
       correct: q.correct.trim(),
@@ -133,7 +142,9 @@ function HostPanel() {
           <h3>🕓 Waiting Lobby</h3>
           <ul>
             {playerList.map(p => (
-              <li key={p.id}>👤 {p.name}</li>
+              <li key={p.id}>
+                {p.emoji || '👤'} {p.name}
+              </li>
             ))}
           </ul>
         </div>
@@ -188,6 +199,29 @@ function HostPanel() {
       {timeLeft !== null && (
         <div style={{ marginTop: '20px', fontWeight: 'bold' }}>
           ⏳ Time Left: {timeLeft}s
+        </div>
+      )}
+
+      {/* Leaderboard */}
+      {leaderboard.length > 0 && (
+        <div style={{
+          marginTop: '30px',
+          padding: '15px',
+          border: '2px solid #888',
+          borderRadius: '8px',
+          backgroundColor: '#f9f9f9'
+        }}>
+          <h3>{quizEnded ? '🎉 Final Leaderboard' : '🏆 Live Leaderboard'}</h3>
+          <ul style={{ listStyleType: 'none', padding: 0 }}>
+            {leaderboard
+              .filter(p => p.name.toLowerCase() !== 'host')
+              .sort((a, b) => b.score - a.score)
+              .map((p, index) => (
+                <li key={p.id} style={{ marginBottom: '6px' }}>
+                  {index + 1}. {p.emoji || '👤'} {p.name} - {p.score} pts
+                </li>
+              ))}
+          </ul>
         </div>
       )}
     </div>
