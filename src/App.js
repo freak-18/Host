@@ -17,7 +17,7 @@ function HostPanel() {
     const initialQuestions = Array.from({ length: questionCount }, () => ({
       text: '',
       options: ['', '', '', ''],
-      correct: '',
+      correct: '', // should be index of correct option as string (e.g., "2")
       timeLimit: 15,
     }));
     setQuestions(initialQuestions);
@@ -80,14 +80,28 @@ function HostPanel() {
 
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
-      if (!q.text.trim() || q.options.some(opt => !opt.trim()) || !q.correct.trim()) {
-        return alert(`Please fill all fields for Question ${i + 1}`);
+      if (
+        !q.text.trim() ||
+        q.options.some(opt => !opt.trim()) ||
+        !q.correct.trim() ||
+        isNaN(q.correct) ||
+        q.correct < 0 ||
+        q.correct > 3
+      ) {
+        return alert(`Please fill all fields correctly for Question ${i + 1}`);
       }
     }
-    const formatted = questions.map(q => ({
-      ...q,
-      correct: q.correct.trim(),
-    }));
+
+    // ✅ Convert correct index to actual option string safely
+    const formatted = questions.map(q => {
+      const correctIndex = parseInt(q.correct, 10);
+      return {
+        ...q,
+        correct: q.options[correctIndex] || '', // fallback to '' if index is invalid
+      };
+    });
+
+    console.log("📤 Sending questions to server:", formatted);
 
     socket.emit('send-multiple-questions', {
       roomCode: roomCode.trim(),
@@ -174,8 +188,8 @@ function HostPanel() {
             />
           ))}
           <input
-            type="text"
-            placeholder="Correct Answer"
+            type="number"
+            placeholder="Correct Option Number (0-3)"
             value={q.correct}
             onChange={(e) => handleQuestionChange(i, 'correct', e.target.value)}
             style={{ width: '100%', marginBottom: '10px' }}
