@@ -17,7 +17,7 @@ function HostPanel() {
     const initialQuestions = Array.from({ length: questionCount }, () => ({
       text: '',
       options: ['', '', '', ''],
-      correct: '', // should be index of correct option as string (e.g., "2")
+      correct: '',
       timeLimit: 15,
     }));
     setQuestions(initialQuestions);
@@ -92,12 +92,11 @@ function HostPanel() {
       }
     }
 
-    // ✅ Convert correct index to actual option string safely
     const formatted = questions.map(q => {
       const correctIndex = parseInt(q.correct, 10);
       return {
         ...q,
-        correct: q.options[correctIndex] || '', // fallback to '' if index is invalid
+        correct: q.options[correctIndex] || '',
       };
     });
 
@@ -111,6 +110,13 @@ function HostPanel() {
     socket.emit('start-quiz', roomCode.trim());
     setTimeLeft(formatted[0].timeLimit || 15);
     setQuizStarted(true);
+  };
+
+  // ✅ Kick a player
+  const handleKick = (playerId) => {
+    if (window.confirm('Are you sure you want to kick this player?')) {
+      socket.emit('kick-player', { roomCode: roomCode.trim(), playerId });
+    }
   };
 
   return (
@@ -144,7 +150,6 @@ function HostPanel() {
         disabled={quizStarted}
       />
 
-      {/* Waiting Lobby */}
       {playerList.length > 0 && (
         <div style={{
           background: '#f4f4f4',
@@ -158,16 +163,59 @@ function HostPanel() {
             {playerList.map(p => (
               <li key={p.id}>
                 {p.emoji || '👤'} {p.name}
+                {!quizStarted && (
+                  <button
+                    onClick={() => handleKick(p.id)}
+                    style={{
+                      marginLeft: '10px',
+                      backgroundColor: 'red',
+                      color: 'white',
+                      border: 'none',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ❌ Kick
+                  </button>
+                )}
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      {/* Question Inputs */}
       {questions.map((q, i) => (
         <div key={i} style={{ border: '1px solid #ccc', padding: '15px', marginBottom: '15px' }}>
           <h3>Question {i + 1}</h3>
+
+          <textarea
+            placeholder="Paste 6 lines:\n1. Question\n2-5. Options\n6. Correct Option Index (0-3)"
+            rows={6}
+            style={{ width: '100%', marginBottom: '10px', backgroundColor: '#fdf9dd', padding: '8px' }}
+            onPaste={(e) => {
+              e.preventDefault();
+              const pasted = e.clipboardData.getData('text').trim();
+              const lines = pasted.split('\n').map(line => line.trim());
+              if (lines.length < 6) {
+                alert('❌ Paste format must include 6 lines: question, 4 options, correct index');
+                return;
+              }
+
+              const [text, ...opts] = lines;
+              const correct = opts.pop();
+              const updated = [...questions];
+              updated[i] = {
+                ...updated[i],
+                text,
+                options: opts,
+                correct: correct.trim(),
+              };
+              setQuestions(updated);
+            }}
+            disabled={quizStarted}
+          />
+
           <input
             type="text"
             placeholder="Enter Question"
@@ -216,7 +264,6 @@ function HostPanel() {
         </div>
       )}
 
-      {/* Leaderboard */}
       {leaderboard.length > 0 && (
         <div style={{
           marginTop: '30px',
