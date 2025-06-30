@@ -12,6 +12,7 @@ function HostPanel() {
   const [roomCreated, setRoomCreated] = useState(false);
   const [leaderboard, setLeaderboard] = useState([]);
   const [quizEnded, setQuizEnded] = useState(false);
+  const [playerLimit, setPlayerLimit] = useState(10);
 
   useEffect(() => {
     const initialQuestions = Array.from({ length: questionCount }, () => ({
@@ -24,7 +25,7 @@ function HostPanel() {
   }, [questionCount]);
 
   useEffect(() => {
-    socket.on('lobby-update', setPlayerList);
+    socket.on('lobby-update', ({ players }) => setPlayerList(players));
     return () => socket.off('lobby-update');
   }, []);
 
@@ -49,7 +50,6 @@ function HostPanel() {
       setQuizEnded(true);
       setTimeLeft(null);
     });
-
     return () => {
       socket.off('leaderboard');
       socket.off('quiz-ended');
@@ -70,7 +70,10 @@ function HostPanel() {
 
   const createRoom = () => {
     if (!roomCode.trim()) return alert('Enter Room Code');
-    socket.emit('create-room', roomCode.trim());
+    socket.emit('create-room', {
+      roomCode: roomCode.trim(),
+      maxPlayers: playerLimit, // players only
+    });
     setRoomCreated(true);
   };
 
@@ -100,8 +103,6 @@ function HostPanel() {
       };
     });
 
-    console.log("📤 Sending questions to server:", formatted);
-
     socket.emit('send-multiple-questions', {
       roomCode: roomCode.trim(),
       questions: formatted,
@@ -112,7 +113,6 @@ function HostPanel() {
     setQuizStarted(true);
   };
 
-  // ✅ Kick a player
   const handleKick = (playerId) => {
     if (window.confirm('Are you sure you want to kick this player?')) {
       socket.emit('kick-player', { roomCode: roomCode.trim(), playerId });
@@ -130,6 +130,16 @@ function HostPanel() {
         onChange={(e) => setRoomCode(e.target.value)}
         style={{ width: '100%', marginBottom: '10px' }}
         disabled={quizStarted}
+      />
+
+      <input
+        type="number"
+        placeholder="Max Players (excluding host)"
+        min={1}
+        value={playerLimit}
+        onChange={(e) => setPlayerLimit(Number(e.target.value))}
+        style={{ width: '100%', marginBottom: '10px' }}
+        disabled={roomCreated || quizStarted}
       />
 
       <button
