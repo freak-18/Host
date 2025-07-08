@@ -13,6 +13,7 @@ function HostPanel() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [quizEnded, setQuizEnded] = useState(false);
   const [playerLimit, setPlayerLimit] = useState(10);
+  const [canSendNext, setCanSendNext] = useState(false); // ✅ new flag
 
   useEffect(() => {
     const initialQuestions = Array.from({ length: questionCount }, () => ({
@@ -50,9 +51,13 @@ function HostPanel() {
       setQuizEnded(true);
       setTimeLeft(null);
     });
+    socket.on('question-ended', () => {
+      setCanSendNext(true); // ✅ enable Next after question ends
+    });
     return () => {
       socket.off('leaderboard');
       socket.off('quiz-ended');
+      socket.off('question-ended');
     };
   }, []);
 
@@ -72,7 +77,7 @@ function HostPanel() {
     if (!roomCode.trim()) return alert('Enter Room Code');
     socket.emit('create-room', {
       roomCode: roomCode.trim(),
-      maxPlayers: playerLimit, // players only
+      maxPlayers: playerLimit,
     });
     setRoomCreated(true);
   };
@@ -109,8 +114,14 @@ function HostPanel() {
     });
 
     socket.emit('start-quiz', roomCode.trim());
-    setTimeLeft(formatted[0].timeLimit || 15);
     setQuizStarted(true);
+    setCanSendNext(true); // ✅ enable first question control
+  };
+
+  const sendNextQuestion = () => {
+    if (!canSendNext) return;
+    socket.emit('next-question', roomCode.trim());
+    setCanSendNext(false); // ✅ disable until this question ends
   };
 
   const handleKick = (playerId) => {
@@ -264,9 +275,21 @@ function HostPanel() {
         </div>
       ))}
 
-      <button onClick={sendQuestions} disabled={quizStarted || !roomCreated}>
-        🚀 Send Questions and Start Quiz
-      </button>
+      {!quizStarted && (
+        <button onClick={sendQuestions} disabled={!roomCreated}>
+          🚀 Send Questions and Start Quiz
+        </button>
+      )}
+
+      {quizStarted && (
+        <button
+          onClick={sendNextQuestion}
+          disabled={!canSendNext}
+          style={{ marginTop: '15px', padding: '10px', backgroundColor: '#4caf50', color: 'white', border: 'none' }}
+        >
+          👉 Next Question
+        </button>
+      )}
 
       {timeLeft !== null && (
         <div style={{ marginTop: '20px', fontWeight: 'bold' }}>
